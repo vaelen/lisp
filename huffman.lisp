@@ -1,0 +1,36 @@
+(defparameter *chunk-size* 4096)
+
+(defun count-characters (char-list &optional counts)
+  (cond ((not counts)
+         (count-characters char-list (make-hash-table :test #'equal)))
+        ((not (listp char-list))
+         (count-characters (coerce char-list 'list) counts))
+        ((car char-list)
+         (let* ((char (car char-list))
+                (count (gethash char counts)))
+           (if (not count)
+               (setf (gethash char counts) 1)
+               (incf (gethash char counts)))
+           (count-characters (cdr char-list) counts)))
+        (t counts)))
+
+(defun print-hash-table (h)
+  (mapc #'(lambda (x) (princ x))
+        (maphash #'(lambda (key val)
+                     (format t "~A ~A~%" key val)) h)))
+
+(defmethod huffman-encode ((buffer sequence))
+  (let* ((buf (coerce buffer 'list))
+         (counts (count-characters buf)))
+    (print-hash-table counts)))
+        
+
+(defmethod huffman-encode ((input stream))
+   (let ((buffer (make-array *chunk-size*)))
+     (loop for pos = (read-sequence buffer input)
+        while (plusp pos)
+        do (huffman-encode buffer))))
+
+(defun huffman-test ()
+  (with-open-file (input "huffman.lisp" :direction :input)
+    (huffman-encode input)))
