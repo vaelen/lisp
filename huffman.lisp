@@ -1,3 +1,19 @@
+(load "~/quicklisp/setup.lisp")
+(asdf:load-system 'cl-heap)
+
+(defpackage :huffman
+  (:use :common-lisp)
+  (:export :encode
+           :test)
+  (:import-from :cl-heap
+                :fibonacci-heap
+                :add-to-heap
+                :pop-heap
+                :heap-size
+                :peep-at-heap))
+
+(in-package :huffman)
+
 (defparameter *chunk-size* 4096)
 
 (defun count-characters (char-list &optional counts)
@@ -19,18 +35,49 @@
         (maphash #'(lambda (key val)
                      (format t "~A ~A~%" key val)) h)))
 
-(defmethod huffman-encode ((buffer sequence))
+(defun counts-to-queue (counts)
+  (let ((queue (make-instance 'fibonacci-heap :key #'first)))
+    (maphash #'(lambda (key value) (add-to-heap queue (list value key))) counts)
+    queue))
+
+(defun build-tree (queue)
+  (if (> (heap-size queue) 1)
+      (let ((left (pop-heap queue))
+            (right (pop-heap queue)))
+        (add-to-heap queue (list (+ (first left) (first right)) left right))
+        (build-tree queue))
+      (pop-heap queue)))
+
+(defun find-in-tree (tree char &optional prefix)
+  (let ((left (second tree))
+        (right (third tree)))
+    (if (not (listp left))
+        (if (equal char left)
+            (reverse prefix)
+            'nil)
+        (or (find-in-tree left char (cons 0 prefix))
+            (find-in-tree right char (cons 1 prefix))))))
+
+(defmethod encode ((buffer sequence))
   (let* ((buf (coerce buffer 'list))
-         (counts (count-characters buf)))
-    (print-hash-table counts)))
-        
+         (counts (count-characters buf))
+         (queue (counts-to-queue counts))
+         (tree (build-tree queue)))
+    (print-hash-table counts)
+    (pprint queue)
+    (pprint tree)
+    (pprint (find-in-tree tree '#\p))
+    tree))
 
-(defmethod huffman-encode ((input stream))
-   (let ((buffer (make-array *chunk-size*)))
-     (loop for pos = (read-sequence buffer input)
-        while (plusp pos)
-        do (huffman-encode buffer))))
+(defmethod encode ((input stream))
+   (let ((buffer (make-array *chunk-size* :fill-pointer t)))
+     (loop
+        (setf (fill-pointer buffer) (read-sequence buffer input))
+        (when (zerop (fill-pointer buffer)) (return))
+        (encode buffer))))
 
-(defun huffman-test ()
+(defun test ()
   (with-open-file (input "huffman.lisp" :direction :input)
-    (huffman-encode input)))
+    (encode input)))
+
+
