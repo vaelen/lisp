@@ -1,6 +1,5 @@
 ;; Sorts 64bit integers using MSD radix sort
 (defun radix-sort (lst &optional pos)
-  ;;(format t "List: ~a, Position: ~a~%" lst pos) 
   (cond ((not pos) (radix-sort lst 63))
         ((< pos 0) lst)
         ((not lst) lst)
@@ -8,13 +7,11 @@
         (t (let ((b0 '())
                  (b1 '()))
              (dolist (i lst)
-               ;;(format t "I: ~a~%" i)
                (cond ((= 0 (ldb (byte 1 pos) i)) (setf b0 (cons i b0)))
                      (t (setf b1 (cons i b1)))))
-             ;;(format t "B0: ~a, B1: ~a~%" b0 b1)
              (append (radix-sort b0 (- pos 1))
                      (radix-sort b1 (- pos 1)))))))
-           
+
 ;; Generate some random 64bit integers
 (defun generate-integers (n)
   (let ((lst '()))
