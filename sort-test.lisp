@@ -23,20 +23,20 @@
     lst))
 
 ;; Test that a list is sorted
-(defun list-is-sorted? (lst)
+(defun list-is-sorted? (lst &optional (predicate #'<=))
   (let ((last-value 0)
         (list-size 0))
     (dolist (value lst)
             (setf list-size (+ list-size 1))
             (cond
-              ((< value last-value)
-               (format t "Failed: ~a < ~a~%" value last-value)
+              ((not (funcall predicate last-value value))
+               (format t "Failed: ~a is not ~s ~a~%" last-value predicate value)
                (setf last-value nil)
                (return))
               (t (setf last-value value))))
     (cond
       ((null last-value) nil)
-      (t (format t "Success: ~a Items~%" list-size)
+      (t (format t "Success: ~:d Items~%" list-size)
          t))))
 
 ;; Test a given sort function
@@ -49,8 +49,8 @@
      (setf size (length lst)))
     ((and size-supplied-p (not list-supplied-p))
      (setf lst (generate-integers size))))
-  (format t "Sort Algorithm: ~s, List Size: ~s~%" sort-function (length lst))
-  (time (setf lst (funcall sort-function lst predicate)))
+  (format t "Sort Algorithm: ~s, List Size: ~:d~%" sort-function (length lst))
+  (time (setf lst (funcall sort-function (copy-seq lst) predicate)))
   (list-is-sorted? lst))
 
 ;; Test the radix-sort function
