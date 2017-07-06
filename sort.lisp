@@ -26,7 +26,7 @@
        (append (radix-sort b0 predicate (- pos 1))
                (radix-sort b1 predicate (- pos 1)))))))
 
-;; Sorts values uses merge sort
+;; Sorts values using merge sort
 (defun merge-sort (lst &optional (predicate #'<=))
   (cond
     ((not lst) lst)
