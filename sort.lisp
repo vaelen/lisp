@@ -1,44 +1,40 @@
+;; This library is licensed under the GNU LGPL v3.0.
+;; Copyright Andrew Young, 2017
+
+;;;;; Sorting Algorithms ;;;;;
+
+(defpackage :vaelen-sort
+  (:use :common-lisp)
+  (:export :radix-sort
+           :merge-sort))
+
+(in-package :vaelen-sort)
+
 ;; Sorts 64bit integers using MSD radix sort
-(defun radix-sort (lst &optional pos)
-  (cond ((not pos) (radix-sort lst 63))
-        ((< pos 0) lst)
-        ((not lst) lst)
-        ((not (rest lst)) lst)
-        (t (let ((b0 '())
-                 (b1 '()))
-             (dolist (i lst)
-               (cond ((= 0 (ldb (byte 1 pos) i)) (setf b0 (cons i b0)))
-                     (t (setf b1 (cons i b1)))))
-             (append (radix-sort b0 (- pos 1))
-                     (radix-sort b1 (- pos 1)))))))
+(defun radix-sort (lst &optional (predicate #'<=) (pos 63))
+  (cond
+    ((< pos 0) lst)
+    ((not lst) lst)
+    ((not (rest lst)) lst)
+    (t
+     (let ((b0 '())
+           (b1 '()))
+       (dolist (i lst)
+               (cond
+                 ((= 0 (ldb (byte 1 pos) i)) (setf b0 (cons i b0)))
+                 (t (setf b1 (cons i b1)))))
+       (append (radix-sort b0 predicate (- pos 1))
+               (radix-sort b1 predicate (- pos 1)))))))
 
-;; Generate some random 64bit integers
-(defun generate-integers (n)
-  (let ((lst '()))
-    (dotimes (i n)
-      (setf lst (cons (random #xffffffff) lst)))
-    lst))
-
-;; Test that a list is sorted
-(defun list-is-sorted? (lst)
-  (let ((last-value 0)
-        (list-size 0))
-    (dolist (value lst)
-      (setf list-size (+ list-size 1))
-      (cond ((< value last-value)
-             (format t "Failed: ~a < ~a~%" value last-value)
-             (setf last-value nil)
-             (return))
-            (t (setf last-value value))))
-    (cond ((null last-value) nil)
-           (t (format t "Success: ~a Items~%" list-size)
-              t))))
-
-;; Test the radix-sort function
-(defun test-radix-sort (n)
-  (let ((lst (generate-integers n)))
-    ;; (format t "List: ~a~%" lst)
-    (time (setf lst (radix-sort lst)))
-    ;; (format t "List: ~a~%" lst)
-    (list-is-sorted? lst)
-    nil))
+;; Sorts values uses merge sort
+(defun merge-sort (lst &optional (predicate #'<=))
+  (cond
+    ((not lst) lst)
+    ((not (rest lst)) lst)
+    (t
+     (let ((mid (ceiling (length lst) 2)))
+       (merge
+        'list
+        (merge-sort (subseq lst 0 mid) predicate)
+        (merge-sort (subseq lst mid nil) predicate)
+        predicate)))))
