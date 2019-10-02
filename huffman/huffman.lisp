@@ -17,6 +17,8 @@
    "eeeeeeeeeeeeeeee"
    "fffffffffffffffffffffffffffffffffffffffffffff"))
 
+(defparameter *buffer-size* 4096)
+
 (defstruct node (score 0) value left right)
 
 (defun node-lt (first second)
@@ -58,26 +60,45 @@
            (loop for c in (coerce text 'list)
               collect (gethash c encoding)))))
 
-(defun bits-to-bytes (bits)
-  (let ((bytes `())
-        (byte 0)
-        (bit 8))
-    (append
-     (loop while (> (length bits) 8)
-        collect (let ((this-byte (subseq bits 0 8)))
-                  (setf bits (subseq bits 8))
-                  this-byte))
-     (list bits))))
+(defun bits-to-byte-list (bits)
+  (append
+   (loop while (> (length bits) 8)
+      collect (let ((this-byte (subseq bits 0 8)))
+                (setf bits (subseq bits 8))
+                this-byte))
+   (list bits)))
 
-;;(defun encode (text)
-;;  (bits-to-bytes (bits (encode-bits text))))
-    
+(defun byte-list-to-bytes (byte-list)
+  (loop for b in byte-list collect
+       (let ((n 0)
+             (bit 7))
+         (loop for value in b
+            do (progn
+                 (setf (ldb (byte 1 bit) n) value)
+                 (decf bit))
+            finally (return n)))))
+
+(defun encode-chunk (chunk output-stream)
+  (write-sequence
+   (byte-list-to-bytes
+    (bits-to-byte-list
+     (encode-bits chunk)))
+   output-stream))
+
+(defun encode (input-stream output-stream)
+  (let ((buffer (make-array *buffer-size*
+                            :adjustable nil
+                            :element-type '(unsigned-byte 8))))
+    (loop for pos = (read-sequence buffer input-stream)
+       while (plusp pos)
+        do (encode-chunk (subseq buffer 0 pos) output-stream))))
 
 (defun test ()
   (let* ((text example)
          (tree (build-tree (count-chars text)))
-         (encoding (tree-to-hash tree)))
-    (format 't "~&Tree:")
+         (encoding (tree-to-hash tree))
+         (byte-list (bits-to-byte-list (encode-bits text))))
+    (format *standard-output* "~&Tree:")
     (pprint tree)
     (format 't "~&~%")
     (format 't "~&Mapping:")
@@ -86,9 +107,7 @@
     (format 't "~&")
     (pprint (encode-bits text))
     (format 't "~&")
-    (pprint (bits-to-bytes (encode-bits text)))
+    (pprint byte-list)
+    (format 't "~&")
+    (pprint (byte-list-to-bytes byte-list))
     (format 't "~&")))
-
-
-(test)
-(quit)
