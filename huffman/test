@@ -1,0 +1,38 @@
+#!/usr/bin/cl --quicklisp --restart huffman:test --load huffman.lisp
+
+(in-package :huffman)
+
+(defparameter example
+  (concatenate
+   'string
+   "aaaaa"
+   "bbbbbbbbb"
+   "cccccccccccc"
+   "ddddddddddddd"
+   "eeeeeeeeeeeeeeee"
+   "fffffffffffffffffffffffffffffffffffffffffffff"))
+
+(defun test ()
+  (let* ((text example)
+         (tree (build-tree text))
+         (header (header->bits tree))
+         (mapping (tree->huffman-mapping tree))
+         (bits (encode-bits text mapping))
+         (byte-list (bits->byte-list bits))
+         (bytes (byte-list->bytes byte-list)))
+    (format *standard-output* "~&Tree:")
+    (pprint tree)
+    (format 't "~&~%")
+    
+    (format 't "~&Mapping:")
+    (loop for k being the hash-keys in mapping using (hash-value v)
+       do (format 't "~&~t~a: ~a" k v))
+    (format 't "~&~%Header:")
+    (pprint header)
+    (format 't "~&~%Bits:")
+    (pprint bits)
+    (format 't "~&~%Byte List:")
+    (pprint byte-list)
+    (format 't "~&~%Bytes:")
+    (pprint bytes)
+    (format 't "~&")))

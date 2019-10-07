@@ -45,10 +45,14 @@
                :long "block-size"
                :arg-parser #'parse-integer
                :meta-var "BYTES")
-      (:name :help
-             :description "print this help text"
-             :short #\h
-             :long "help"))
+        (:name :print-mapping
+               :description "print the huffman code mapping for each block"
+               :short #\p
+               :long "print-mapping")
+        (:name :help
+               :description "print this help text"
+               :short #\h
+               :long "help"))
 
     (multiple-value-bind (options free-args)
         (handler-case
@@ -77,9 +81,10 @@
                    (setf input-stream (pathname (getf options :input))))
       (when-option (options :output)
                    (setf output-stream (pathname (getf options :output))))
-      (format t "free args: ~{~a~^, ~}~%" free-args))
-
+      (when-option (options :print-mapping)
+                   (huffman:print-mapping input-stream :block-size block-size)
+                   (opts:exit 0)))
     
     (encode input-stream output-stream :block-size block-size)
-    (opts:exit)))
+    (opts:exit 0)))
 
