@@ -84,23 +84,29 @@
    output-stream))
 
 (defun encode (input-stream output-stream &key (block-size *block-size*))
-  ;; If the input is a path, open the file and recurse
-  (if (pathnamep input-stream)
-      (with-open-file (in input-stream :element-type '(unsigned-byte 8))
-        (encode in output-stream :block-size block-size)))
+  (cond
+    ;; If the input is a path, open the file and recurse
+    ((pathnamep input-stream)
+     (with-open-file (in input-stream
+                         :direction :input
+                         :element-type '(unsigned-byte 8))
+       (encode in output-stream :block-size block-size)))
+    ;; If the output is a path, open the file and recurse
+    ((pathnamep output-stream)
+     (with-open-file (out output-stream
+                          :direction :output
+                          :if-exists :supersede
+                          :element-type '(unsigned-byte 8))
+       (encode input-stream out :block-size block-size)))
 
-  ;; If the output is a path, open the file and recurse
-  (if (pathnamep output-stream)
-      (with-open-file (out output-stream :element-type '(unsigned-byte 8))
-        (encode input-stream out :block-size block-size)))
-
-  ;; Create a temporary buffer and encode into it
-  (let ((buffer (make-array block-size
-                            :adjustable nil
-                            :element-type '(unsigned-byte 8))))
-    (loop for pos = (read-sequence buffer input-stream)
-       while (plusp pos)
-        do (encode-chunk (subseq buffer 0 pos) output-stream))))
+    ;; Otherwise, create a temporary buffer and encode into it
+    (t
+     (let ((buffer (make-array block-size
+                               :adjustable nil
+                               :element-type '(unsigned-byte 8))))
+       (loop for pos = (read-sequence buffer input-stream)
+          while (plusp pos)
+          do (encode-chunk (subseq buffer 0 pos) output-stream))))))
 
 (defun test ()
   (let* ((text example)
