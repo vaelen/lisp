@@ -1,13 +1,11 @@
-(defconstant ipsum (concatenate 'string
-  "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod "
-  "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
-  "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea "
-  "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate "
-  "velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat "
-  "cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id "
-  "est laborum."))
+(defpackage :huffman
+  (:use :common-lisp)
+  (:export :encode
+           :*block-size*))
 
-(defconstant example
+(in-package :huffman)
+
+(defparameter example
   (concatenate
    'string
    "aaaaa"
@@ -17,7 +15,7 @@
    "eeeeeeeeeeeeeeee"
    "fffffffffffffffffffffffffffffffffffffffffffff"))
 
-(defparameter *buffer-size* 4096)
+(defparameter *block-size* 1024)
 
 (defstruct node (score 0) value left right)
 
@@ -85,8 +83,19 @@
      (encode-bits chunk)))
    output-stream))
 
-(defun encode (input-stream output-stream)
-  (let ((buffer (make-array *buffer-size*
+(defun encode (input-stream output-stream &key (block-size *block-size*))
+  ;; If the input is a path, open the file and recurse
+  (if (pathnamep input-stream)
+      (with-open-file (in input-stream :element-type '(unsigned-byte 8))
+        (encode in output-stream :block-size block-size)))
+
+  ;; If the output is a path, open the file and recurse
+  (if (pathnamep output-stream)
+      (with-open-file (out output-stream :element-type '(unsigned-byte 8))
+        (encode input-stream out :block-size block-size)))
+
+  ;; Create a temporary buffer and encode into it
+  (let ((buffer (make-array block-size
                             :adjustable nil
                             :element-type '(unsigned-byte 8))))
     (loop for pos = (read-sequence buffer input-stream)
