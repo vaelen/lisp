@@ -23,7 +23,8 @@
 (defun main (argv)
   (let ((input-stream *standard-input*)
         (output-stream *standard-output*)
-        (block-size huffman:*block-size*))
+        (block-size huffman:*block-size*)
+        (verbose nil))
 
     
     (opts:define-opts
@@ -45,10 +46,14 @@
                :long "block-size"
                :arg-parser #'parse-integer
                :meta-var "BYTES")
-        (:name :print-mapping
-               :description "print the huffman code mapping for each block"
+        (:name :print
+               :description "print information about each block (verbose output will print the mapping)"
                :short #\p
-               :long "print-mapping")
+               :long "print")
+        (:name :verbose
+               :description "be more verbose"
+               :short #\v
+               :long "verbose")
         (:name :help
                :description "print this help text"
                :short #\h
@@ -81,10 +86,12 @@
                    (setf input-stream (pathname (getf options :input))))
       (when-option (options :output)
                    (setf output-stream (pathname (getf options :output))))
-      (when-option (options :print-mapping)
-                   (huffman:print-mapping input-stream :block-size block-size)
+      (when-option (options :verbose)
+                   (setf verbose 't))
+      (when-option (options :print)
+                   (huffman:print-info input-stream :block-size block-size :verbose verbose)
                    (opts:exit 0)))
     
-    (encode input-stream output-stream :block-size block-size)
+    (encode input-stream output-stream :block-size block-size :verbose verbose)
     (opts:exit 0)))
 

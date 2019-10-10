@@ -2,7 +2,7 @@
   (:use :common-lisp)
   (:export :encode
            :*block-size*
-           :print-mapping
+           :print-info
            :test))
 
 (in-package :huffman)
@@ -13,6 +13,8 @@
 
 (defstruct node (score 0) value left right)
 
+(defstruct encoder counts tree mapping header-bits eob-bits block-number data-length compressed-size)
+
 (defun node-lt (first second)
   (< (node-score first) (node-score second)))
 
@@ -22,22 +24,21 @@
   (setf (gethash *end-of-block* counts) 1)
   counts)
 
-(defun build-tree (text)
-  "Build a Huffman Tree from the given input"
-  (let ((counts-hash (count-chars (coerce text 'list)))
-        (counts '()))
-    (flet ((add (key value) (push (make-node :score value :value key) counts)))
-      (maphash #'add counts-hash)
-      (sort counts #'node-lt))
-    (loop while (> (length counts) 1)
-       do (let ((left (pop counts))
-                (right (pop counts)))
+(defun counts->tree (counts)
+  "Build a Huffman Tree from the given character counts"
+  (let ((queue '()))
+    (flet ((add (key value) (push (make-node :score value :value key) queue)))
+      (maphash #'add counts)
+      (sort queue #'node-lt))
+    (loop while (> (length queue) 1)
+       do (let ((left (pop queue))
+                (right (pop queue)))
             (push (make-node :score (+ (node-score left) (node-score right))
                              :left left
                              :right right)
-                  counts)
-            (setf counts (sort counts #'node-lt)))
-       finally (return (first counts)))))
+                  queue)
+            (setf queue (sort queue #'node-lt)))
+       finally (return (first queue)))))
 
 (defun tree->huffman-mapping (node &optional (value '()) (hash (make-hash-table)))
   "Convert a Huffman Tree to a character -> bit sequence mapping using the simple method."
@@ -57,7 +58,16 @@
     (tree->code-length-mapping (node-right node) (+ depth 1) hash))
   hash)
 
-(defun text->bits (text mapping)
+(defun calculate-compressed-size (encoder)
+  (ceiling 
+   (+ (length (encoder-header-bits encoder))
+      (length (encoder-eob-bits encoder))
+      (reduce '+ (loop for k being the hash-keys in (encoder-counts encoder)
+                    collect (* (gethash k (encoder-counts encoder))
+                               (length (gethash k (encoder-mapping encoder)))))))
+   8))
+
+(defun data->bits (text mapping)
   (apply #'append 
          (loop for c in (coerce text 'list)
             collect (gethash c mapping))))
@@ -98,19 +108,73 @@
 (defun end-of-block->bits (mapping)
   (gethash *end-of-block* mapping))
 
-(defun encode-block (block output-stream)
-  (let ((tree (build-tree block))
-        (mapping (tree->huffman-mapping tree)))
+(defun data->encoder (data &optional (block-number 1))
+  (let* ((counts (count-chars (coerce data 'list)))
+         (tree (counts->tree counts))
+         (mapping (tree->huffman-mapping tree))
+         (header-bits (header->bits tree))
+         (eob-bits (end-of-block->bits mapping))
+         (encoder (make-encoder :counts counts
+                                :tree tree
+                                :mapping mapping
+                                :header-bits header-bits
+                                :eob-bits eob-bits
+                                :block-number block-number
+                                :data-length (length data))))
+    (setf (encoder-compressed-size encoder)
+          (calculate-compressed-size encoder))
+    encoder))
+
+(defun print-encoder-data (encoder)
+  (format 't "~&Block #~a" (encoder-block-number encoder))
+  (format 't "~&  Original Size: ~a bytes" (encoder-data-length encoder))
+  (format 't "~&  Compressed Size: ~a bytes" (encoder-compressed-size encoder))
+  (format 't "~&  Compression Ratio: ~a%" (* (/ (encoder-compressed-size encoder)
+                                                     (encoder-data-length encoder))
+                                                  100.0)))
+
+(defun print-info-helper (data &optional (block-number 1) verbose)
+  (let* ((encoder (data->encoder data block-number))
+         (keys (loop for k being the hash-keys in (encoder-mapping encoder) collect k)))
+    (sort keys #'<)
+    (print-encoder-data encoder)
+    (cond (verbose (format 't "~&  Mapping:")
+                   (loop for k in keys
+                      do (format 't "~&    ~a: ~a" k (gethash k (encoder-mapping encoder))))))
+    (format 't "~&")))
+
+(defun print-info (input-stream &key (block-size *block-size*) verbose)
+  (cond
+    ;; If the input is a path, open the file and recurse
+    ((pathnamep input-stream)
+     (with-open-file (in input-stream
+                         :direction :input
+                         :element-type '(unsigned-byte 8))
+       (print-info  in :block-size block-size)))
+
+    ;; Otherwise, create a temporary buffer and print the huffman codes for each block
+    (t
+     (let ((buffer (make-array block-size
+                               :adjustable nil
+                               :element-type '(unsigned-byte 8)))
+           (block-number 0))
+       (loop for pos = (read-sequence buffer input-stream)
+          while (plusp pos)
+          do (print-info-helper (subseq buffer 0 pos) (incf block-number) verbose))))))
+
+(defun encode-block (data output-stream &optional (block-number 1) verbose)
+  (let ((encoder (data->encoder data block-number)))
+    (if verbose (print-encoder-data encoder))
     (write-sequence
      (byte-list->bytes
       (bits->byte-list
        (append
-        (header->bits tree)
-        (text->bits block mapping)
-        (end-of-block->bits mapping))))
+        (encoder-header-bits encoder)
+        (data->bits data (encoder-mapping encoder))
+        (encoder-eob-bits encoder))))
      output-stream)))
 
-(defun encode (input-stream output-stream &key (block-size *block-size*))
+(defun encode (input-stream output-stream &key (block-size *block-size*) (block-number 1) verbose)
   (cond
     ;; If the input is a path, open the file and recurse
     ((pathnamep input-stream)
@@ -133,35 +197,4 @@
                                :element-type '(unsigned-byte 8))))
        (loop for pos = (read-sequence buffer input-stream)
           while (plusp pos)
-          do (encode-block (subseq buffer 0 pos) output-stream))))))
-
-(defun print-mapping-helper (text &optional (block 0))
-  (let* ((tree (build-tree text))
-         (mapping (tree->huffman-mapping tree))
-         (keys (loop for k being the hash-keys in mapping collect k)))
-    (sort keys #'<)
-    (format 't "~& Block ~a" block)
-    (format 't "~&Mapping:")
-    (loop for k in keys
-       do (format 't "~&~t~a: ~a" k (gethash k mapping)))
-    (format 't "~&")))
-
-(defun print-mapping (input-stream &key (block-size *block-size*))
-  (cond
-    ;; If the input is a path, open the file and recurse
-    ((pathnamep input-stream)
-     (with-open-file (in input-stream
-                         :direction :input
-                         :element-type '(unsigned-byte 8))
-       (print-mapping  in :block-size block-size)))
-
-    ;; Otherwise, create a temporary buffer and print the huffman codes for each block
-    (t
-     (let ((buffer (make-array block-size
-                               :adjustable nil
-                               :element-type '(unsigned-byte 8)))
-           (block 0))
-       (loop for pos = (read-sequence buffer input-stream)
-          while (plusp pos)
-          do (print-mapping-helper (subseq buffer 0 pos)))))))
-
+          do (encode-block (subseq buffer 0 pos) output-stream block-number verbose))))))
