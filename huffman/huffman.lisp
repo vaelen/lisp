@@ -129,7 +129,7 @@
   (format 't "~&Block #~a" (encoder-block-number encoder))
   (format 't "~&  Original Size: ~a bytes" (encoder-data-length encoder))
   (format 't "~&  Compressed Size: ~a bytes" (encoder-compressed-size encoder))
-  (format 't "~&  Compression Ratio: ~a%" (* (/ (encoder-compressed-size encoder)
+  (format 't "~&  Compression Ratio: ~a%~&" (* (/ (encoder-compressed-size encoder)
                                                      (encoder-data-length encoder))
                                                   100.0)))
 
@@ -181,14 +181,14 @@
      (with-open-file (in input-stream
                          :direction :input
                          :element-type '(unsigned-byte 8))
-       (encode in output-stream :block-size block-size)))
+       (encode in output-stream :block-size block-size :verbose verbose)))
     ;; If the output is a path, open the file and recurse
     ((pathnamep output-stream)
      (with-open-file (out output-stream
                           :direction :output
                           :if-exists :supersede
                           :element-type '(unsigned-byte 8))
-       (encode input-stream out :block-size block-size)))
+       (encode input-stream out :block-size block-size :verbose verbose)))
 
     ;; Otherwise, create a temporary buffer and encode into it
     (t
