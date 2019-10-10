@@ -18,8 +18,8 @@
 
 (defun count-chars (char-list &optional (counts (make-hash-table)))
   "Counts characters using a hash table"
-  (setf (gethash *end-of-block* counts) 1)
   (loop for c in char-list do (incf (gethash c counts 0)))
+  (setf (gethash *end-of-block* counts) 1)
   counts)
 
 (defun build-tree (text)
@@ -57,10 +57,10 @@
     (tree->code-length-mapping (node-right node) (+ depth 1) hash))
   hash)
 
-(defun encode-bits (text encoding)
+(defun text->bits (text mapping)
   (apply #'append 
          (loop for c in (coerce text 'list)
-            collect (gethash c encoding))))
+            collect (gethash c mapping))))
 
 (defun bits->byte-list (bits)
   (append
@@ -95,6 +95,9 @@
               (header->bits (node-right node)))
       '(0)))
 
+(defun end-of-block->bits (mapping)
+  (gethash *end-of-block* mapping))
+
 (defun encode-block (block output-stream)
   (let ((tree (build-tree block))
         (mapping (tree->huffman-mapping tree)))
@@ -103,8 +106,8 @@
       (bits->byte-list
        (append
         (header->bits tree)
-        (encode-bits block mapping)
-        (gethash *end-of-block* mapping))))
+        (text->bits block mapping)
+        (end-of-block->bits mapping))))
      output-stream)))
 
 (defun encode (input-stream output-stream &key (block-size *block-size*))
