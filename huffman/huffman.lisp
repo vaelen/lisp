@@ -20,7 +20,10 @@
 
 (defun count-chars (char-list &optional (counts (make-hash-table)))
   "Counts characters using a hash table"
-  (loop for c in char-list do (incf (gethash c counts 0)))
+  (loop for c in char-list do (incf (gethash
+                                     (if (characterp c)
+                                         (char-code c)
+                                         c) counts 0)))
   (setf (gethash *end-of-block* counts) 1)
   counts)
 
@@ -29,7 +32,7 @@
   (let ((queue '()))
     (flet ((add (key value) (push (make-node :score value :value key) queue)))
       (maphash #'add counts)
-      (sort queue #'node-lt))
+      (setf queue (stable-sort queue #'node-lt)))
     (loop while (> (length queue) 1)
        do (let ((left (pop queue))
                 (right (pop queue)))
@@ -37,7 +40,7 @@
                              :left left
                              :right right)
                   queue)
-            (setf queue (sort queue #'node-lt)))
+            (setf queue (stable-sort queue #'node-lt)))
        finally (return (first queue)))))
 
 (defun tree->huffman-mapping (node &optional (value '()) (hash (make-hash-table)))
@@ -133,14 +136,21 @@
                                                      (encoder-data-length encoder))
                                                   100.0)))
 
-(defun print-info-helper (data &optional (block-number 1) verbose)
-  (let* ((encoder (data->encoder data block-number))
-         (keys (loop for k being the hash-keys in (encoder-mapping encoder) collect k)))
-    (sort keys #'<)
+(defun print-info-helper (encoder &optional verbose)
+  (let ((keys
+        (loop
+           for k being the hash-keys in (encoder-mapping encoder)
+           collect k)))
+    (setf keys (stable-sort keys #'<))
     (print-encoder-data encoder)
     (cond (verbose (format 't "~&  Mapping:")
                    (loop for k in keys
-                      do (format 't "~&    ~a: ~a" k (gethash k (encoder-mapping encoder))))))
+                      do (let* ((v (gethash k (encoder-mapping encoder)))
+                                (c (if (and (> k 31) (< k 127))
+                                       (code-char k)
+                                       k)))
+                           (if (= k *end-of-block*) (setf c "EOB"))
+                           (format 't "~&    ~a (~a): ~a" k c v)))))
     (format 't "~&")))
 
 (defun print-info (input-stream &key (block-size *block-size*) verbose)
@@ -150,7 +160,7 @@
      (with-open-file (in input-stream
                          :direction :input
                          :element-type '(unsigned-byte 8))
-       (print-info  in :block-size block-size)))
+       (print-info in :block-size block-size :verbose verbose)))
 
     ;; Otherwise, create a temporary buffer and print the huffman codes for each block
     (t
@@ -160,7 +170,9 @@
            (block-number 0))
        (loop for pos = (read-sequence buffer input-stream)
           while (plusp pos)
-          do (print-info-helper (subseq buffer 0 pos) (incf block-number) verbose))))))
+          do (print-info-helper
+              (data->encoder (subseq buffer 0 pos) (incf block-number))
+              verbose))))))
 
 (defun encode-block (data output-stream &optional (block-number 1) verbose)
   (let ((encoder (data->encoder data block-number)))

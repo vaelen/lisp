@@ -10,11 +10,14 @@
    "cccccccccccc"
    "ddddddddddddd"
    "eeeeeeeeeeeeeeee"
-   "fffffffffffffffffffffffffffffffffffffffffffff"))
+   "fffffffffffffffffffffffffffffffffffffffffffff"
+   "ABCDEABCDECDEE"))
 
 (defun test ()
-  (let* ((data example)
-         (encoder (data->encoder data))
+  (let* ((data (loop
+                  for c in (coerce example 'list)
+                    collect (char-code c)))
+         (encoder (data->encoder data 1))
          (tree (encoder-tree encoder))
          (header (header->bits tree))
          (bits (data->bits data (encoder-mapping encoder)))
@@ -24,11 +27,7 @@
     (format *standard-output* "~&Tree:")
     (pprint tree)
     (format 't "~&~%")
-    (format 't "~&Mapping:")
-    (loop for k being the hash-keys in (encoder-mapping encoder) using (hash-value v)
-       do (format 't "~&~t~a: ~a" k v))
-    (format 't "~&~%")
-    (print-encoder-data encoder)
+    (print-info-helper encoder t)
     (format 't "~&~%Header:")
     (pprint header)
     (format 't "~&~%Data:")
