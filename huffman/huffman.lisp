@@ -36,6 +36,12 @@
     (loop while (> (length queue) 1)
        do (let ((left (pop queue))
                 (right (pop queue)))
+            (if (and (= (node-score left) (node-score right))
+                     (node-value left) (node-value right)
+                     (> (node-value left) (node-value right)))
+                (let ((temp left))
+                  (setf left right)
+                  (setf right temp)))
             (push (make-node :score (+ (node-score left) (node-score right))
                              :left left
                              :right right)
