@@ -91,7 +91,9 @@
       (when-option (options :print)
                    (huffman:print-info input-stream :block-size block-size :verbose verbose)
                    (opts:exit 0)))
-    
-    (encode input-stream output-stream :block-size block-size :verbose verbose)
+
+    (flet ((f ()
+             (encode input-stream output-stream :block-size block-size :verbose verbose)))
+      (if verbose (time (f)) (f)))
     (opts:exit 0)))
 

@@ -235,7 +235,7 @@
         (encoder-eob-bits encoder))))
      output-stream)))
 
-(defun encode (input-stream output-stream &key (block-size *block-size*) (block-number 1) verbose)
+(defun encode (input-stream output-stream &key (block-size *block-size*) (block-number 0) verbose)
   (cond
     ;; If the input is a path, open the file and recurse
     ((pathnamep input-stream)
@@ -258,4 +258,4 @@
                                :element-type '(unsigned-byte 8))))
        (loop for pos = (read-sequence buffer input-stream)
           while (plusp pos)
-          do (encode-block (subseq buffer 0 pos) output-stream block-number verbose))))))
+          do (encode-block (subseq buffer 0 pos) output-stream (incf block-number) verbose))))))
